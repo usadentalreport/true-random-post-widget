@@ -2,7 +2,7 @@
 /**
  * Plugin Name: True Random Post Widget
  * Description: Display a truly random post from your entire database on page refresh. Properly randomizes across all posts, not just recent ones.
- * Version: 2.1.0
+ * Version: 2.2.0
  * Author: Your Name
  * Requires at least: 5.0
  * Requires PHP: 7.2
@@ -35,6 +35,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 		const OPT_IMAGE_SOURCE      = 'trpw_image_source';      // 'featured' | 'global'
 		const OPT_GLOBAL_IMAGE_ID   = 'trpw_global_image_id';   // attachment ID
 		const OPT_TAXONOMY          = 'trpw_taxonomy';           // taxonomy slug
+		const OPT_TERM_LOGO_FIELD   = 'trpw_term_logo_field';   // SCF/ACF field key for term logo
 		const OPT_BUTTON_TEXT       = 'trpw_button_text';        // e.g. 'Listen'
 		const OPT_BUTTON_BG_COLOR   = 'trpw_button_bg_color';   // hex
 		const OPT_BUTTON_TEXT_COLOR = 'trpw_button_text_color'; // hex
@@ -56,9 +57,8 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 			add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_scripts' ) );
 
-			// Taxonomy term logo meta — registered on every request so term
-			// edit screens work even outside the settings page load.
-			add_action( 'init', array( __CLASS__, 'register_taxonomy_meta_hooks' ), 20 );
+			// Term logo images are now managed via Secure Custom Fields (SCF) or ACF.
+			// No custom term meta hooks needed here.
 		}
 
 		/**
@@ -121,6 +121,10 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				'sanitize_callback' => 'sanitize_text_field',
 				'default'           => '',
 			) );
+			register_setting( self::OPTION_GROUP, self::OPT_TERM_LOGO_FIELD, array(
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			) );
 			register_setting( self::OPTION_GROUP, self::OPT_BUTTON_TEXT, array(
 				'sanitize_callback' => 'sanitize_text_field',
 				'default'           => 'Listen',
@@ -141,49 +145,29 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 		 * @param string $hook Current admin page hook.
 		 */
 		public static function enqueue_admin_scripts( $hook ) {
-			$on_settings_page = ( 'settings_page_' . self::MENU_SLUG === $hook );
-
-			// Determine if we're on the taxonomy term edit screen for the saved taxonomy.
-			$on_term_edit_page = false;
-			$saved_taxonomy    = get_option( self::OPT_TAXONOMY, '' );
-			if ( $saved_taxonomy && function_exists( 'get_current_screen' ) ) {
-				$screen = get_current_screen();
-				if ( $screen && 'edit-tags' === $screen->base && $screen->taxonomy === $saved_taxonomy ) {
-					$on_term_edit_page = true;
-				}
-			}
-
-			if ( ! $on_settings_page && ! $on_term_edit_page ) {
+			if ( 'settings_page_' . self::MENU_SLUG !== $hook ) {
 				return;
 			}
 
-			// Media library
+			// Media library + color picker (settings page only)
 			wp_enqueue_media();
-
-			// WP color picker (settings page only)
-			if ( $on_settings_page ) {
-				wp_enqueue_style( 'wp-color-picker' );
-			}
+			wp_enqueue_style( 'wp-color-picker' );
 
 			wp_enqueue_script(
 				'trpw-admin',
 				plugins_url( '/assets/admin.js', __FILE__ ),
 				array( 'jquery', 'wp-color-picker' ),
-				'2.0.0',
+				'2.2.0',
 				true
 			);
 
 			wp_localize_script( 'trpw-admin', 'trpwAdmin', array(
-				'mediaTitle'       => __( 'Select Image', 'true-random-post-widget' ),
-				'mediaButton'      => __( 'Use this image', 'true-random-post-widget' ),
-				'changeText'       => __( 'Change Image', 'true-random-post-widget' ),
-				'removeText'       => __( 'Remove', 'true-random-post-widget' ),
-				'selectText'       => __( 'Select Image', 'true-random-post-widget' ),
-				'termMediaTitle'   => __( 'Select Term Logo', 'true-random-post-widget' ),
-				'termMediaButton'  => __( 'Use as Logo', 'true-random-post-widget' ),
-				'changeLogoText'   => __( 'Change Logo', 'true-random-post-widget' ),
-				'selectLogoText'   => __( 'Select Logo', 'true-random-post-widget' ),
-				'onSettingsPage'   => $on_settings_page ? '1' : '0',
+				'mediaTitle'     => __( 'Select Image', 'true-random-post-widget' ),
+				'mediaButton'    => __( 'Use this image', 'true-random-post-widget' ),
+				'changeText'     => __( 'Change Image', 'true-random-post-widget' ),
+				'removeText'     => __( 'Remove', 'true-random-post-widget' ),
+				'selectText'     => __( 'Select Image', 'true-random-post-widget' ),
+				'onSettingsPage' => '1',
 			) );
 		}
 
@@ -195,12 +179,14 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				return;
 			}
 
-			$image_source    = get_option( self::OPT_IMAGE_SOURCE, 'featured' );
-			$global_image_id = (int) get_option( self::OPT_GLOBAL_IMAGE_ID, 0 );
-			$taxonomy        = get_option( self::OPT_TAXONOMY, '' );
-			$button_text     = get_option( self::OPT_BUTTON_TEXT, 'Listen' );
-			$button_bg       = get_option( self::OPT_BUTTON_BG_COLOR, '#1a1a1a' );
-			$button_color    = get_option( self::OPT_BUTTON_TEXT_COLOR, '#ffffff' );
+			$image_source     = get_option( self::OPT_IMAGE_SOURCE, 'featured' );
+			$global_image_id  = (int) get_option( self::OPT_GLOBAL_IMAGE_ID, 0 );
+			$taxonomy         = get_option( self::OPT_TAXONOMY, '' );
+			$term_logo_field  = get_option( self::OPT_TERM_LOGO_FIELD, '' );
+			$button_text      = get_option( self::OPT_BUTTON_TEXT, 'Listen' );
+			$button_bg        = get_option( self::OPT_BUTTON_BG_COLOR, '#1a1a1a' );
+			$button_color     = get_option( self::OPT_BUTTON_TEXT_COLOR, '#ffffff' );
+			$scf_active       = function_exists( 'get_field' );
 
 			$global_image_url = $global_image_id ? wp_get_attachment_image_url( $global_image_id, 'thumbnail' ) : '';
 
@@ -292,7 +278,30 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 									<?php endforeach; ?>
 								</select>
 								<p class="description">
-									<?php esc_html_e( 'The first term from this taxonomy will appear in the card footer with its logo. After saving, you can add logos to individual terms via the taxonomy term edit screen.', 'true-random-post-widget' ); ?>
+									<?php esc_html_e( 'The first term from this taxonomy will appear in the card footer. Set a field key below to also show a term logo.', 'true-random-post-widget' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr( self::OPT_TERM_LOGO_FIELD ); ?>">
+									<?php esc_html_e( 'Term Logo Field Key', 'true-random-post-widget' ); ?>
+								</label>
+							</th>
+							<td>
+								<input type="text"
+									id="<?php echo esc_attr( self::OPT_TERM_LOGO_FIELD ); ?>"
+									name="<?php echo esc_attr( self::OPT_TERM_LOGO_FIELD ); ?>"
+									value="<?php echo esc_attr( $term_logo_field ); ?>"
+									class="regular-text"
+									placeholder="e.g. term_logo" />
+								<p class="description">
+									<?php if ( $scf_active ) : ?>
+										<?php esc_html_e( 'Secure Custom Fields (SCF) / ACF is active. Enter the field name of the Image field you created for this taxonomy — the plugin will call get_field() with this key on each term.', 'true-random-post-widget' ); ?>
+									<?php else : ?>
+										<strong style="color:#d63638;"><?php esc_html_e( 'SCF / ACF is not active.', 'true-random-post-widget' ); ?></strong>
+										<?php esc_html_e( ' Install and activate Secure Custom Fields (or ACF), create an Image field group for your taxonomy, then enter the field name here. Without SCF/ACF the field key will be read as plain term meta.', 'true-random-post-widget' ); ?>
+									<?php endif; ?>
 								</p>
 							</td>
 						</tr>
@@ -354,106 +363,6 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				</form>
 			</div>
 			<?php
-		}
-
-		/* ---------------------------------------------------------------
-		 * Taxonomy term logo meta
-		 * ------------------------------------------------------------- */
-
-		/**
-		 * Attach hooks to the saved taxonomy so terms can have a logo image.
-		 * Called on 'init' with priority 20 (after taxonomies are registered).
-		 */
-		public static function register_taxonomy_meta_hooks() {
-			$taxonomy = get_option( self::OPT_TAXONOMY, '' );
-			if ( ! $taxonomy || ! taxonomy_exists( $taxonomy ) ) {
-				return;
-			}
-
-			// Add logo field on the "Add New Term" form
-			add_action( "{$taxonomy}_add_form_fields", array( __CLASS__, 'add_term_logo_field' ) );
-
-			// Add logo field on the "Edit Term" form
-			add_action( "{$taxonomy}_edit_form_fields", array( __CLASS__, 'edit_term_logo_field' ), 10, 2 );
-
-			// Save on create / edit
-			add_action( "created_{$taxonomy}", array( __CLASS__, 'save_term_logo' ) );
-			add_action( "edited_{$taxonomy}", array( __CLASS__, 'save_term_logo' ) );
-		}
-
-		/**
-		 * Render logo field on the "Add New Term" form.
-		 */
-		public static function add_term_logo_field() {
-			?>
-			<div class="form-field term-logo-wrap">
-				<label><?php esc_html_e( 'Term Logo', 'true-random-post-widget' ); ?></label>
-				<input type="hidden" id="trpw-term-logo-id" name="trpw_term_logo" value="" />
-				<div id="trpw-term-logo-preview"></div>
-				<button type="button" id="trpw-select-term-logo" class="button button-secondary">
-					<?php esc_html_e( 'Select Logo', 'true-random-post-widget' ); ?>
-				</button>
-				<p class="description">
-					<?php esc_html_e( 'Image displayed as a circular logo in the True Random Post Widget card footer.', 'true-random-post-widget' ); ?>
-				</p>
-			</div>
-			<?php
-		}
-
-		/**
-		 * Render logo field on the "Edit Term" form.
-		 *
-		 * @param WP_Term $term     Current term object.
-		 * @param string  $taxonomy Current taxonomy slug.
-		 */
-		public static function edit_term_logo_field( $term, $taxonomy ) {
-			$logo_id  = (int) get_term_meta( $term->term_id, 'trpw_term_logo', true );
-			$logo_url = $logo_id ? wp_get_attachment_image_url( $logo_id, 'thumbnail' ) : '';
-			?>
-			<tr class="form-field term-logo-wrap">
-				<th scope="row">
-					<label><?php esc_html_e( 'Term Logo', 'true-random-post-widget' ); ?></label>
-				</th>
-				<td>
-					<input type="hidden" id="trpw-term-logo-id" name="trpw_term_logo" value="<?php echo esc_attr( $logo_id ); ?>" />
-					<div id="trpw-term-logo-preview">
-						<?php if ( $logo_url ) : ?>
-							<img src="<?php echo esc_url( $logo_url ); ?>"
-								style="max-width:80px;height:auto;display:block;margin-bottom:6px;border:1px solid #ddd;border-radius:4px;" />
-						<?php endif; ?>
-					</div>
-					<button type="button" id="trpw-select-term-logo" class="button button-secondary">
-						<?php echo $logo_id
-							? esc_html__( 'Change Logo', 'true-random-post-widget' )
-							: esc_html__( 'Select Logo', 'true-random-post-widget' ); ?>
-					</button>
-					<button type="button" id="trpw-remove-term-logo" class="button button-link-delete"
-						style="margin-left:6px;<?php echo ! $logo_id ? 'display:none;' : ''; ?>">
-						<?php esc_html_e( 'Remove', 'true-random-post-widget' ); ?>
-					</button>
-					<p class="description">
-						<?php esc_html_e( 'Image displayed as a circular logo in the True Random Post Widget card footer.', 'true-random-post-widget' ); ?>
-					</p>
-				</td>
-			</tr>
-			<?php
-		}
-
-		/**
-		 * Save term logo meta when a term is created or edited.
-		 *
-		 * @param int $term_id Term ID being saved.
-		 */
-		public static function save_term_logo( $term_id ) {
-			if ( ! isset( $_POST['trpw_term_logo'] ) ) {
-				return;
-			}
-			$logo_id = absint( $_POST['trpw_term_logo'] );
-			if ( $logo_id ) {
-				update_term_meta( $term_id, 'trpw_term_logo', $logo_id );
-			} else {
-				delete_term_meta( $term_id, 'trpw_term_logo' );
-			}
 		}
 
 		/* ---------------------------------------------------------------
@@ -561,12 +470,13 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			$image_required = wp_validate_boolean( $atts['image_required'] );
 
 			// ── Plugin settings ──────────────────────────────────────────
-			$image_source    = get_option( self::OPT_IMAGE_SOURCE, 'featured' );
-			$global_image_id = (int) get_option( self::OPT_GLOBAL_IMAGE_ID, 0 );
-			$taxonomy        = get_option( self::OPT_TAXONOMY, '' );
-			$button_text     = get_option( self::OPT_BUTTON_TEXT, '' );
-			$button_bg       = sanitize_hex_color( get_option( self::OPT_BUTTON_BG_COLOR, '#1a1a1a' ) ) ?: '#1a1a1a';
-			$button_color    = sanitize_hex_color( get_option( self::OPT_BUTTON_TEXT_COLOR, '#ffffff' ) ) ?: '#ffffff';
+			$image_source     = get_option( self::OPT_IMAGE_SOURCE, 'featured' );
+			$global_image_id  = (int) get_option( self::OPT_GLOBAL_IMAGE_ID, 0 );
+			$taxonomy         = get_option( self::OPT_TAXONOMY, '' );
+			$term_logo_field  = get_option( self::OPT_TERM_LOGO_FIELD, '' );
+			$button_text      = get_option( self::OPT_BUTTON_TEXT, '' );
+			$button_bg        = sanitize_hex_color( get_option( self::OPT_BUTTON_BG_COLOR, '#1a1a1a' ) ) ?: '#1a1a1a';
+			$button_color     = sanitize_hex_color( get_option( self::OPT_BUTTON_TEXT_COLOR, '#ffffff' ) ) ?: '#ffffff';
 
 			if ( ! $button_text ) {
 				$button_text = __( 'Listen', 'true-random-post-widget' );
@@ -615,14 +525,40 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				if ( $terms && ! is_wp_error( $terms ) ) {
 					$term      = reset( $terms );
 					$term_name = $term->name;
-					$logo_id   = (int) get_term_meta( $term->term_id, 'trpw_term_logo', true );
-					if ( $logo_id ) {
-						$term_logo = wp_get_attachment_image(
-							$logo_id,
-							array( 48, 48 ),
-							false,
-							array( 'class' => 'true-random-post-widget__term-img' )
-						);
+
+					if ( $term_logo_field ) {
+						$logo_id = 0;
+
+						if ( function_exists( 'get_field' ) ) {
+							// SCF / ACF is active — call get_field() with the configured key.
+							$field_value = get_field( $term_logo_field, $term );
+
+							if ( is_array( $field_value ) && ! empty( $field_value['id'] ) ) {
+								// Image Array return format → extract the attachment ID.
+								$logo_id = (int) $field_value['id'];
+							} elseif ( is_numeric( $field_value ) && $field_value ) {
+								// Image ID return format.
+								$logo_id = (int) $field_value;
+							} elseif ( is_string( $field_value ) && $field_value ) {
+								// Image URL return format → render directly.
+								$term_logo = '<img src="' . esc_url( $field_value ) . '" '
+									. 'class="true-random-post-widget__term-img" '
+									. 'width="48" height="48" alt="" />';
+							}
+						} else {
+							// SCF / ACF not active — fall back to plain term meta
+							// using the field key as the meta key.
+							$logo_id = (int) get_term_meta( $term->term_id, $term_logo_field, true );
+						}
+
+						if ( $logo_id && ! $term_logo ) {
+							$term_logo = wp_get_attachment_image(
+								$logo_id,
+								array( 48, 48 ),
+								false,
+								array( 'class' => 'true-random-post-widget__term-img' )
+							);
+						}
 					}
 				}
 			}

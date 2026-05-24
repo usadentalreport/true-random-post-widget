@@ -2,7 +2,7 @@
 /**
  * Plugin Name: True Random Post Widget
  * Description: Display a truly random post from your entire database on page refresh. Properly randomizes across all posts, not just recent ones.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: Your Name
  * Requires at least: 5.0
  * Requires PHP: 7.2

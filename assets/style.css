@@ -1,58 +1,134 @@
-/* True Random Post Widget */
+/* True Random Post Widget - v2.0.0
+   Card layout matching the Overjet-style design */
 
+/* ─── Wrapper card ────────────────────────────────────────────────────── */
 .true-random-post-widget {
 	border: 1px solid #e5e5e5;
-	border-radius: 4px;
+	border-radius: 8px;
 	overflow: hidden;
-	background: #fff;
-	transition: box-shadow 0.3s ease;
+	background: #ffffff;
+	max-width: 520px;
+	font-family: inherit;
+	box-sizing: border-box;
 }
 
-.true-random-post-widget:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.true-random-post-widget__link {
-	text-decoration: none;
-	color: inherit;
-	display: block;
-	transition: all 0.3s ease;
-}
-
-.true-random-post-widget__link:hover {
-	text-decoration: none;
-}
-
+/* ─── Hero image ──────────────────────────────────────────────────────── */
 .true-random-post-widget__image {
 	width: 100%;
-	height: auto;
-	display: block;
 	overflow: hidden;
-	background: #f5f5f5;
+	background: #f0f0f0;
+	/* Maintain a 16:9-ish aspect ratio without JS */
+	aspect-ratio: 16 / 9;
 }
 
-.true-random-post-widget__image img {
+.true-random-post-widget__img {
 	width: 100%;
-	height: auto;
+	height: 100%;
+	object-fit: cover;
 	display: block;
-	transition: transform 0.3s ease;
 }
 
-.true-random-post-widget__link:hover .true-random-post-widget__image img {
-	transform: scale(1.05);
+/* ─── Body (title + excerpt) ──────────────────────────────────────────── */
+.true-random-post-widget__body {
+	padding: 18px 20px 20px;
+	border-bottom: 1px solid #e5e5e5;
 }
 
 .true-random-post-widget__title {
-	font-size: 1.25em;
-	font-weight: 600;
-	margin: 1em 1em 0.5em 1em;
+	font-size: 1rem;
+	font-weight: 700;
 	line-height: 1.4;
-	color: #222;
+	color: #111111;
+	margin: 0 0 12px 0;
+	padding: 0;
 }
 
 .true-random-post-widget__excerpt {
-	font-size: 0.95em;
-	color: #666;
-	margin: 0 1em 1em 1em;
-	line-height: 1.6;
+	font-size: 0.9375rem; /* 15px */
+	line-height: 1.65;
+	color: #333333;
+	margin: 0;
+	padding: 0;
+}
+
+/* ─── Footer (term logo + name + button) ──────────────────────────────── */
+.true-random-post-widget__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	gap: 12px;
+}
+
+/* Term section */
+.true-random-post-widget__term {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0; /* allow text to truncate */
+}
+
+.true-random-post-widget__term-logo {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	overflow: hidden;
+	background: #111111;
+}
+
+.true-random-post-widget__term-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.true-random-post-widget__term-name {
+	font-size: 0.9rem;
+	font-weight: 500;
+	color: #111111;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* CTA button */
+.true-random-post-widget__button {
+	display: inline-block;
+	flex-shrink: 0;
+	padding: 10px 22px;
+	border-radius: 5px;
+	font-size: 0.875rem; /* 14px */
+	font-weight: 600;
+	line-height: 1;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	/* Colors injected via inline style from PHP; these are fallbacks */
+	background-color: #1a1a1a;
+	color: #ffffff;
+	transition: opacity 0.2s ease;
+}
+
+.true-random-post-widget__button:hover,
+.true-random-post-widget__button:focus {
+	opacity: 0.82;
+	text-decoration: none;
+}
+
+/* ─── Responsive tweak ────────────────────────────────────────────────── */
+@media ( max-width: 480px ) {
+	.true-random-post-widget__footer {
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.true-random-post-widget__button {
+		width: 100%;
+		text-align: center;
+	}
 }

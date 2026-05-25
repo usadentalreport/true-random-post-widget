@@ -2,7 +2,7 @@
 
 A lightweight WordPress plugin that displays a truly random post from your entire database on every page refresh—not just recent posts. Includes a rich card layout with a featured image, excerpt, taxonomy footer label, and a customizable CTA button.
 
-**Current version: 2.1.0**
+**Current version: 2.3.0**
 
 ---
 
@@ -19,9 +19,11 @@ A lightweight WordPress plugin that displays a truly random post from your entir
 
 - ✅ **True randomization** across the entire post database
 - ✅ **No recency bias** — older posts get equal exposure
+- ✅ **Publish-date filter** — optionally limit results to posts from the last 14–365 days
 - ✅ **Card layout** — image, title, excerpt, and footer with taxonomy term + button
 - ✅ **Flexible image source** — use each post's featured image or one global image
 - ✅ **Taxonomy footer** — display a term name and circular logo in the card footer
+- ✅ **SCF / ACF term logos** — configure a custom image field key for term logos
 - ✅ **Customizable button** — set text, background color, and text color in admin
 - ✅ **Excerpt fallback** — uses trimmed post content when no excerpt is set
 - ✅ **Lightweight** — 2 efficient database queries, no external dependencies
@@ -44,6 +46,8 @@ Navigate to **Settings → True Random Post** to configure:
 | Option | Description |
 |---|---|
 | **Footer Taxonomy** | Choose any public taxonomy (e.g. *Category*, *Post Tag*, or a custom one). The first term assigned to the post is shown in the card footer, along with its logo if one has been set. |
+| **Term Logo Field Key** | The SCF / ACF field name of an Image field attached to your chosen taxonomy. The plugin calls `get_field()` with this key on each term to retrieve the logo. Falls back to plain term meta if SCF / ACF is not active. |
+| **Post Date Filter** | Limit the pool of eligible posts to those published within a rolling window: last 14, 30, 60, 90, 180, or 365 days. Defaults to **All time** (no filter). |
 
 ### Button Settings
 
@@ -57,14 +61,17 @@ Navigate to **Settings → True Random Post** to configure:
 
 ## Taxonomy Term Logos
 
-After selecting a taxonomy in **Settings → True Random Post**, each term in that taxonomy gains a **Term Logo** field on its edit screen (`/wp-admin/edit-tags.php?taxonomy=…`).
+Term logos are managed via **Secure Custom Fields (SCF)** or **Advanced Custom Fields (ACF)**:
 
-1. Open any term in the selected taxonomy.
-2. Scroll to the **Term Logo** field.
-3. Click **Select Logo** to choose an image from the WP media library.
-4. Save the term.
+1. Install and activate SCF or ACF.
+2. Create a **Field Group** targeting your chosen taxonomy with an **Image** field.
+3. Note the field name (e.g. `term_logo`).
+4. Enter that field name in **Settings → True Random Post → Term Logo Field Key**.
+5. Edit any term in that taxonomy and populate the image field.
 
-The logo is displayed as a 40 × 40 px circular avatar in the card footer next to the term name.
+The logo is displayed as a 48 × 48 px image in the card footer next to the term name.
+
+> **Without SCF / ACF:** the field key is treated as a plain term meta key read via `get_term_meta()`.
 
 ---
 
@@ -83,11 +90,24 @@ Optional shortcode attributes:
 | `post_type` | `post` | Post type to pull from (e.g. `page`, `podcast`). |
 | `image_required` | `false` | Set `true` to skip posts without a featured image. |
 | `class` | _(empty)_ | Extra CSS class added to the wrapper element. |
+| `date_range` | _(admin setting)_ | Days to look back from today. `0` = all time. Overrides the global admin setting for this instance only. |
 
 Example:
 
 ```
 [true_random_post post_type="podcast" image_required="true" class="my-widget"]
+```
+
+Limit to posts published in the last 30 days:
+
+```
+[true_random_post date_range="30"]
+```
+
+Force all-time on a specific instance even when the admin default is set to a window:
+
+```
+[true_random_post date_range="0"]
 ```
 
 ---
@@ -111,7 +131,7 @@ Example:
   <!-- Footer: taxonomy term + CTA button -->
   <div class="true-random-post-widget__footer">
     <div class="true-random-post-widget__term">
-      <span class="true-random-post-widget__term-logo"> <!-- circular logo --> </span>
+      <span class="true-random-post-widget__term-logo"> <!-- term logo image --> </span>
       <span class="true-random-post-widget__term-name">Term Name</span>
     </div>
     <a class="true-random-post-widget__button" style="background-color:…;color:…;">Listen</a>
@@ -144,8 +164,20 @@ Example:
 
 ## Changelog
 
+### 2.3.0
+- New **Post Date Filter** admin setting (Display Settings section)
+- Filter options: All time, last 14 / 30 / 60 / 90 / 180 / 365 days
+- Date filter applies to both the count query and the fetch query, preserving true randomization within the selected window
+- New `date_range` shortcode attribute to override the global setting per-instance (e.g. `[true_random_post date_range="30"]`; `date_range="0"` forces all-time)
+
+### 2.2.0
+- Replaced built-in term logo field on taxonomy term edit screens with SCF / ACF integration
+- New **Term Logo Field Key** admin setting — enter the SCF / ACF image field name for the chosen taxonomy
+- Plugin calls `get_field()` when SCF / ACF is active; falls back to `get_term_meta()` otherwise
+- Version bump to 2.2.0
+
 ### 2.1.0
-- Bumped version to 2.1.0
+- Version bump to 2.1.0
 
 ### 2.0.0
 - Complete redesign of the shortcode card output (image → title → excerpt → footer)
@@ -176,4 +208,5 @@ GPL v3 — see LICENSE file
 For issues:
 1. Confirm the plugin folder contains `true-random-post-widget.php`, `assets/style.css`, and `assets/admin.js`
 2. Check that you have published posts of the chosen post type
-3. Review `/wp-content/debug.log` for PHP errors
+3. If using the date filter, verify posts exist within the selected window
+4. Review `/wp-content/debug.log` for PHP errors

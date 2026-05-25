@@ -2,7 +2,7 @@
 /**
  * Plugin Name: True Random Post Widget
  * Description: Display a truly random post from your entire database on page refresh. Properly randomizes across all posts, not just recent ones.
- * Version: 2.2.0
+ * Version: 2.3.0
  * Author: Your Name
  * Requires at least: 5.0
  * Requires PHP: 7.2
@@ -27,6 +27,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			'post_type'      => 'post',
 			'image_required' => false,
 			'class'          => '',
+			'date_range'     => '',   // '' = use admin default; integer = days to look back (0 = all time)
 		);
 
 		/* ---------------------------------------------------------------
@@ -39,6 +40,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 		const OPT_BUTTON_TEXT       = 'trpw_button_text';        // e.g. 'Listen'
 		const OPT_BUTTON_BG_COLOR   = 'trpw_button_bg_color';   // hex
 		const OPT_BUTTON_TEXT_COLOR = 'trpw_button_text_color'; // hex
+		const OPT_DATE_RANGE        = 'trpw_date_range';        // int: 0=all, 14|30|60|90|180|365 days
 
 		/* ---------------------------------------------------------------
 		 * Bootstrap
@@ -137,6 +139,10 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				'sanitize_callback' => 'sanitize_hex_color',
 				'default'           => '#ffffff',
 			) );
+			register_setting( self::OPTION_GROUP, self::OPT_DATE_RANGE, array(
+				'sanitize_callback' => 'absint',
+				'default'           => 0,
+			) );
 		}
 
 		/**
@@ -186,7 +192,18 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			$button_text      = get_option( self::OPT_BUTTON_TEXT, 'Listen' );
 			$button_bg        = get_option( self::OPT_BUTTON_BG_COLOR, '#1a1a1a' );
 			$button_color     = get_option( self::OPT_BUTTON_TEXT_COLOR, '#ffffff' );
+			$date_range       = (int) get_option( self::OPT_DATE_RANGE, 0 );
 			$scf_active       = function_exists( 'get_field' );
+
+			$date_range_options = array(
+				0   => __( 'All time (no filter)', 'true-random-post-widget' ),
+				14  => __( 'Last 14 days', 'true-random-post-widget' ),
+				30  => __( 'Last 30 days', 'true-random-post-widget' ),
+				60  => __( 'Last 60 days', 'true-random-post-widget' ),
+				90  => __( 'Last 90 days', 'true-random-post-widget' ),
+				180 => __( 'Last 180 days', 'true-random-post-widget' ),
+				365 => __( 'Last 365 days', 'true-random-post-widget' ),
+			);
 
 			$global_image_url = $global_image_id ? wp_get_attachment_image_url( $global_image_id, 'thumbnail' ) : '';
 
@@ -305,6 +322,27 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 								</p>
 							</td>
 						</tr>
+						<tr>
+							<th scope="row">
+								<label for="<?php echo esc_attr( self::OPT_DATE_RANGE ); ?>">
+									<?php esc_html_e( 'Post Date Filter', 'true-random-post-widget' ); ?>
+								</label>
+							</th>
+							<td>
+								<select id="<?php echo esc_attr( self::OPT_DATE_RANGE ); ?>"
+									name="<?php echo esc_attr( self::OPT_DATE_RANGE ); ?>">
+									<?php foreach ( $date_range_options as $days => $label ) : ?>
+										<option value="<?php echo esc_attr( $days ); ?>"
+											<?php selected( $date_range, $days ); ?>>
+											<?php echo esc_html( $label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'Only pull posts published within the selected window. Choose "All time" to include every post regardless of publish date. Individual shortcodes can override this with the date_range attribute, e.g. [true_random_post date_range="30"].', 'true-random-post-widget' ); ?>
+								</p>
+							</td>
+						</tr>
 					</table>
 
 					<!-- ================================================
@@ -382,6 +420,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				'post_type'      => 'post',
 				'post_status'    => 'publish',
 				'image_required' => false,
+				'date_range'     => 0,  // days to look back; 0 = no date filter
 			);
 
 			$args = wp_parse_args( $args, $defaults );
@@ -391,6 +430,14 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			$post_types     = array_map( 'esc_sql', $post_types );
 			$post_type_list = "'" . implode( "','", $post_types ) . "'";
 
+			// Build optional date filter clause
+			$date_clause = '';
+			$days        = (int) $args['date_range'];
+			if ( $days > 0 ) {
+				$date_limit  = gmdate( 'Y-m-d H:i:s', strtotime( "-{$days} days" ) );
+				$date_clause = $wpdb->prepare( ' AND post_date >= %s', $date_limit );
+			}
+
 			// Count query
 			if ( $args['image_required'] ) {
 				$count_query = $wpdb->prepare(
@@ -399,7 +446,8 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 					INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
 					WHERE p.post_type IN ({$post_type_list})
 					  AND p.post_status = %s
-					  AND pm.meta_key = '_thumbnail_id'",
+					  AND pm.meta_key = '_thumbnail_id'"
+					. $date_clause, // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 					$args['post_status']
 				);
 			} else {
@@ -407,7 +455,8 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 					"SELECT COUNT(*) AS total
 					FROM {$wpdb->posts}
 					WHERE post_type IN ({$post_type_list})
-					  AND post_status = %s",
+					  AND post_status = %s"
+					. $date_clause, // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 					$args['post_status']
 				);
 			}
@@ -428,9 +477,9 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 					INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
 					WHERE p.post_type IN ({$post_type_list})
 					  AND p.post_status = %s
-					  AND pm.meta_key = '_thumbnail_id'
-					ORDER BY p.ID DESC
-					LIMIT %d, 1",
+					  AND pm.meta_key = '_thumbnail_id'"
+					. $date_clause // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+					. ' ORDER BY p.ID DESC LIMIT %d, 1',
 					$args['post_status'],
 					$offset
 				);
@@ -439,9 +488,9 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 					"SELECT *
 					FROM {$wpdb->posts}
 					WHERE post_type IN ({$post_type_list})
-					  AND post_status = %s
-					ORDER BY ID DESC
-					LIMIT %d, 1",
+					  AND post_status = %s"
+					. $date_clause // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+					. ' ORDER BY ID DESC LIMIT %d, 1',
 					$args['post_status'],
 					$offset
 				);
@@ -469,6 +518,11 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 
 			$image_required = wp_validate_boolean( $atts['image_required'] );
 
+			// date_range: '' means inherit the admin setting; any integer overrides it per-shortcode.
+			$date_range = '' === $atts['date_range']
+				? (int) get_option( self::OPT_DATE_RANGE, 0 )
+				: absint( $atts['date_range'] );
+
 			// ── Plugin settings ──────────────────────────────────────────
 			$image_source     = get_option( self::OPT_IMAGE_SOURCE, 'featured' );
 			$global_image_id  = (int) get_option( self::OPT_GLOBAL_IMAGE_ID, 0 );
@@ -486,6 +540,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 			$post = self::get_random_post( array(
 				'post_type'      => sanitize_text_field( $atts['post_type'] ),
 				'image_required' => $image_required,
+				'date_range'     => $date_range,
 			) );
 
 			if ( ! $post ) {

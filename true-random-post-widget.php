@@ -173,6 +173,7 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 				'changeText'     => __( 'Change Image', 'true-random-post-widget' ),
 				'removeText'     => __( 'Remove', 'true-random-post-widget' ),
 				'selectText'     => __( 'Select Image', 'true-random-post-widget' ),
+				'copiedText'     => __( 'Copied!', 'true-random-post-widget' ),
 				'onSettingsPage' => '1',
 			) );
 		}
@@ -399,8 +400,69 @@ if ( ! class_exists( 'TrueRandomPostWidget' ) ) {
 
 					<?php submit_button(); ?>
 				</form>
+
+				<!-- ================================================
+				     SHORTCODE REFERENCE
+				     ============================================== -->
+				<h2 class="title"><?php esc_html_e( 'Shortcode Reference', 'true-random-post-widget' ); ?></h2>
+				<p class="description">
+					<?php esc_html_e( 'Click any example to copy it to your clipboard.', 'true-random-post-widget' ); ?>
+				</p>
+				<table class="form-table trpw-shortcode-reference" role="presentation">
+					<?php foreach ( self::get_shortcode_examples() as $example ) : ?>
+						<tr>
+							<th scope="row"><?php echo esc_html( $example['label'] ); ?></th>
+							<td>
+								<button type="button" class="button trpw-copy-shortcode" data-shortcode="<?php echo esc_attr( $example['shortcode'] ); ?>">
+									<code><?php echo esc_html( $example['shortcode'] ); ?></code>
+								</button>
+								<p class="description"><?php echo esc_html( $example['description'] ); ?></p>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</table>
 			</div>
 			<?php
+		}
+
+		/**
+		 * Shortcode usage examples shown on the settings page.
+		 *
+		 * @return array[] List of { label, shortcode, description }.
+		 */
+		private static function get_shortcode_examples() {
+			return array(
+				array(
+					'label'       => __( 'Default', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post]',
+					'description' => __( 'Pulls a random published post using the settings configured above.', 'true-random-post-widget' ),
+				),
+				array(
+					'label'       => __( 'Custom post type', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post post_type="my_cpt"]',
+					'description' => __( 'Pulls a random entry from the given custom post type instead of "post".', 'true-random-post-widget' ),
+				),
+				array(
+					'label'       => __( 'Require featured image', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post image_required="true"]',
+					'description' => __( 'Only selects posts that have a featured image set.', 'true-random-post-widget' ),
+				),
+				array(
+					'label'       => __( 'Override date range', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post date_range="30"]',
+					'description' => __( 'Limits selection to posts published in the last 30 days, overriding the admin setting. Use "0" for all time.', 'true-random-post-widget' ),
+				),
+				array(
+					'label'       => __( 'Custom wrapper class', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post class="my-custom-class"]',
+					'description' => __( 'Adds an extra CSS class to the widget wrapper for custom styling.', 'true-random-post-widget' ),
+				),
+				array(
+					'label'       => __( 'Combined example', 'true-random-post-widget' ),
+					'shortcode'   => '[true_random_post post_type="my_cpt" image_required="true" date_range="90"]',
+					'description' => __( 'Attributes can be combined in a single shortcode.', 'true-random-post-widget' ),
+				),
+			);
 		}
 
 		/* ---------------------------------------------------------------

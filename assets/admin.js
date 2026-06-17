@@ -66,4 +66,28 @@
 		$( this ).hide();
 	} );
 
+	/* ─── 4. Click-to-copy shortcode examples ───────────────────────── */
+	$( document ).on( 'click', '.trpw-copy-shortcode', function () {
+		var $button  = $( this );
+		var shortcode = $button.data( 'shortcode' );
+
+		var copy = function () {
+			var $original = $button.find( 'code' ).text();
+			$button.find( 'code' ).text( trpwAdmin.copiedText );
+			setTimeout( function () {
+				$button.find( 'code' ).text( $original );
+			}, 1200 );
+		};
+
+		if ( navigator.clipboard && navigator.clipboard.writeText ) {
+			navigator.clipboard.writeText( shortcode ).then( copy );
+			return;
+		}
+
+		var $temp = $( '<textarea>' ).val( shortcode ).appendTo( 'body' ).select();
+		document.execCommand( 'copy' );
+		$temp.remove();
+		copy();
+	} );
+
 } )( jQuery );
